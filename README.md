@@ -11,7 +11,8 @@ their own forks.
 |---|---|
 | `Dockerfile.grate-build` | Alpine 3.23 / armv7 container matching the device's libc/Xorg ABI. Built via `docker buildx build --platform linux/arm/v7 -t grate-build:armv7 .` |
 | `scripts/rt_doas.exp` | Expect wrapper that drives `ssh + doas` password prompts for headless deploys. |
-| `test/dri3_test.c` | XCB-level functional test exercising DRI3 `pixmap_from_fds` / `fds_from_pixmap` and Present `notify_msc`. |
+| `test/dri3_test.c` | XCB-level functional test exercising DRI3 `pixmap_from_fds` / `fds_from_pixmap`, Present `notify_msc`, and page-flip vs copy. |
+| `packaging/xf86-video-opentegra/APKBUILD` | Alpine `APKBUILD` for the patched driver; `abuild`-able inside the container. |
 | `Claude_Context_Surface_RT_Grate.md` | Original mission briefing — kept for context. |
 
 ## Where the driver changes live
@@ -20,11 +21,12 @@ The opentegra DDX patches are in a fork:
 
 > [`LBSiUK/xf86-video-opentegra`](https://github.com/LBSiUK/xf86-video-opentegra) — branch `dri3-present`
 
-Three logical commits on top of upstream `grate-driver/xf86-video-opentegra`:
+Four logical commits on top of upstream `grate-driver/xf86-video-opentegra`:
 
 1. `exa: export TegraEXAThawPixmap helper for cross-TU use`
 2. `Add DRI3 screen support`
 3. `Add Present extension support (copy mode)`
+4. `Add Present page-flip (check_flip/flip/unflip)`
 
 ## Reproducing
 
@@ -60,40 +62,54 @@ Three logical commits on top of upstream `grate-driver/xf86-video-opentegra`:
                 $(pkg-config --cflags --libs xcb xcb-dri3 xcb-present xcb-sync)'
    ```
 
-5. **Deploy to the device** (Surface RT must be reachable; backs up
-   the original .so first):
+5. **Build the APK** (packages the driver for a clean `apk` install):
    ```sh
-   scp src/xf86-video-opentegra/src/.libs/opentegra_drv.so \
-       leonb@10.101.32.179:/tmp/opentegra_drv.so.new
-   scripts/rt_doas.exp \
-       "cp /usr/lib/xorg/modules/drivers/opentegra_drv.so \
-           /usr/lib/xorg/modules/drivers/opentegra_drv.so.bak; \
-        cp /tmp/opentegra_drv.so.new \
-           /usr/lib/xorg/modules/drivers/opentegra_drv.so; \
-        systemctl restart lightdm"
+   docker run --rm --platform linux/arm/v7 -v "$PWD/..:/work" \
+       grate-build:armv7 bash -c '
+       abuild-keygen -a -i -n
+       cd /work/packaging/xf86-video-opentegra
+       export REPODEST=/work/packaging/apk-out
+       abuild checksum && abuild -r'
    ```
+   Output: `packaging/apk-out/packaging/armv7/xf86-video-opentegra-*.apk`
 
-6. **Verify** (in an SSH session to the device):
+6. **Deploy to the device** (Surface RT must be reachable):
+   ```sh
+   scp packaging/apk-out/packaging/armv7/xf86-video-opentegra-*.apk \
+       leonb@10.101.32.179:/tmp/
+   # apk 3.x prompts interactively; </dev/null makes it proceed
+   scripts/rt_doas.exp \
+       "apk add --allow-untrusted /tmp/xf86-video-opentegra-*.apk </dev/null"
+   scripts/rt_doas.exp "systemctl restart lightdm"
+   ```
+   This upgrades over the stock community package; the original .so
+   also stays backed up at `opentegra_drv.so.bak`.
+
+7. **Verify** (in an SSH session to the device):
    ```sh
    grep -E "DRI3|Present" /var/log/Xorg.0.log | grep opentegra
    # expected:
    #   (II) opentegra(0): DRI3 initialized
-   #   (II) opentegra(0): Present initialized (copy mode)
+   #   (II) opentegra(0): Present initialized (page-flip)
 
-   DISPLAY=:0 XAUTHORITY=/home/leonb/.Xauthority /tmp/dri3_test
+   DISPLAY=:0 XAUTHORITY=/var/run/lightdm/root/:0 /tmp/dri3_test
    # expected last lines:
-   #   export ok: nfds=1 stride0=4096 ...
-   #   import ok: pixmap ... reported 1024x768 depth=32
-   #   present complete: kind=1 mode=0 ... msc=<some number>
+   #   present N: mode=1 (FLIP) ...
+   #   FLIP CONFIRMED: page-flip path engaged
    #   OK
+   # Run against the lightdm greeter — a running desktop compositor
+   # legitimately forces Present back to copy mode.
    ```
 
 ## Rollback
 
 ```sh
-doas cp /usr/lib/xorg/modules/drivers/opentegra_drv.so.bak \
-        /usr/lib/xorg/modules/drivers/opentegra_drv.so
+# revert to the stock community package
+doas apk add xf86-video-opentegra
 doas systemctl restart lightdm
+# or, if the community repo is unreachable, restore the backup .so:
+#   doas cp /usr/lib/xorg/modules/drivers/opentegra_drv.so.bak \
+#           /usr/lib/xorg/modules/drivers/opentegra_drv.so
 ```
 
 ## Status / scope
@@ -102,23 +118,22 @@ doas systemctl restart lightdm
   through the Tegra IOMMU).
 - ✅ Present registered; `queue_vblank` returns a real kernel MSC.
 - ✅ No 2D EXA regression (XFCE workflow unchanged).
-- ⏳ Present page-flip (`check_flip`/`flip`/`unflip`) not implemented;
-  server uses Present's copy fallback over DRI3 (correct but
-  unaccelerated for vsync).
+- ✅ Present page-flip (`check_flip`/`flip`/`unflip`) implemented and
+  verified on hardware — a fullscreen present becomes a zero-copy
+  `drmModePageFlip` scanout swap; non-flippable requests fall back to
+  Present's copy path.
 - ⏳ `glxinfo` still reports `llvmpipe` — Mesa needs an actual
   Tegra30 Gallium driver to use this DRI3 plumbing. That's a
-  separate, large work item ("Phase B": port grate-mesa's TGSI
-  shader compiler to NIR against modern Mesa).
+  separate, large work item ("Phase 2": build grate-mesa and port its
+  TGSI shader compiler to NIR against modern Mesa).
 
 ## Next steps
 
 In rough order of return-on-effort:
 
-1. **Present page-flip** — adds `check_flip`/`flip`/`unflip`. Needs
-   CRTC scanout-BO coordination with `drmmode_display.c`.
-2. **Package as APK** — write an Alpine `APKBUILD` so the patched
-   driver installs cleanly alongside pmOS package management.
-3. **Phase 0.5 — grate-mesa rebase** — multi-week. The grate fork is
-   on Mesa 19.3 (Jan 2020); the device has Mesa 25.2.7. Includes the
-   TGSI→NIR shader compiler port (the briefing's Objective B).
-4. **GLES2 conformance survey** — only meaningful after #3.
+1. **Phase 2 — grate-mesa build** — cross-build the grate Gallium
+   driver (branch `22.0.1`, the newest grate-maintained Mesa) and
+   smoke-test `grate_dri.so` on hardware. The path off llvmpipe.
+2. **TGSI→NIR shader compiler port** — the grate fragment/vertex
+   compilers are TGSI-only; modern Mesa (25.x) consumes NIR.
+3. **GLES2 conformance survey** — only meaningful after #1/#2.

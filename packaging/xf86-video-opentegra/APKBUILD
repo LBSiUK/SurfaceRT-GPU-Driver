@@ -1,0 +1,71 @@
+# Maintainer: leonb <leonbrahamsuk@gmail.com>
+#
+# DRI3 + Present (page-flip) fork of xf86-video-opentegra for the
+# Surface RT (Tegra 3). Tracks the `dri3-present` branch of
+# github.com/LBSiUK/xf86-video-opentegra, which adds, on top of
+# grate-driver's 0.6.0:
+#   - DRI3 screen support (dma-buf pixmap import/export)
+#   - Present extension with page-flipping
+# pkgname is kept as the stock community package so this installs as a
+# straight upgrade; `apk del` + re-adding community rolls back.
+pkgname=xf86-video-opentegra
+pkgver=0.6.0_git20260520
+pkgrel=0
+pkgdesc="X.Org driver for NVIDIA Tegra (DRI3 + Present fork)"
+url="https://github.com/LBSiUK/xf86-video-opentegra"
+# This driver is useful only on armv7 Tegra SoCs
+arch="armv7"
+license="MIT"
+subpackages="$pkgname-doc"
+depends="libdrm"
+makedepends="
+	autoconf
+	automake
+	bash
+	bison
+	bsd-compat-headers
+	flex
+	fontsproto
+	libdrm-dev
+	libjpeg-turbo-dev
+	libtool
+	m4
+	util-macros
+	xorg-server-dev
+	xproto
+	"
+_commit="3c8871d3451b4ffbf535f36cee82ef604f3f33cd"
+source="$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
+builddir="$srcdir"/$pkgname-$_commit
+
+prepare() {
+	default_prepare
+
+	# doesn't work without these flags
+	export LDFLAGS="$LDFLAGS -Wl,-z,lazy"
+	export CFLAGS="$CFLAGS -std=gnu99"
+
+	./autogen.sh \
+		--build=$CBUILD \
+		--host=$CHOST \
+		--prefix=/usr
+}
+
+build() {
+	make
+}
+
+check() {
+	make check
+}
+
+package() {
+	make DESTDIR="$pkgdir" install
+
+	install -Dm644 "$builddir"/COPYING \
+		-t "$pkgdir"/usr/share/licenses/"$pkgname"
+}
+
+sha512sums="
+091f67d71898387df96df5bb3583229b21402fb3de54622426ad98f762254660171d5bc269a5dcc41727419bbc91e2821c0996275b50d6e970ac523149798ec2  xf86-video-opentegra-3c8871d3451b4ffbf535f36cee82ef604f3f33cd.tar.gz
+"
