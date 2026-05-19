@@ -145,3 +145,6 @@ In rough order of return-on-effort:
 2. **TGSI→NIR shader compiler port** — the grate fragment/vertex
    compilers are TGSI-only; modern Mesa (25.x) consumes NIR.
 3. **GLES2 conformance survey** — only meaningful after #1/#2.
+
+Phase 2 is staged session-by-session in
+[`docs/PHASE2_ROADMAP.md`](docs/PHASE2_ROADMAP.md).
