@@ -14,3 +14,7 @@ test/dri3_test
 .DS_Store
 *.swp
 *~
+
+# Session handoff for next Claude Code session — local-only, may
+# contain device IPs / paths but never passwords.
+HANDOFF.md
