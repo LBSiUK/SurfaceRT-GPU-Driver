@@ -12,6 +12,7 @@ their own forks.
 | `Dockerfile.grate-build` | Alpine 3.23 / armv7 container matching the device's libc/Xorg ABI. Built via `docker buildx build --platform linux/arm/v7 -t grate-build:armv7 .` |
 | `scripts/rt_doas.exp` | Expect wrapper that drives `ssh + doas` password prompts for headless deploys. |
 | `test/dri3_test.c` | XCB-level functional test exercising DRI3 `pixmap_from_fds` / `fds_from_pixmap`, Present `notify_msc`, and page-flip vs copy. |
+| `test/flipdemo.c` | Fullscreen visual demo — continuously page-flips a sweeping bar, with a live flip/copy + fps readout. |
 | `packaging/xf86-video-opentegra/APKBUILD` | Alpine `APKBUILD` for the patched driver; `abuild`-able inside the container. |
 | `Claude_Context_Surface_RT_Grate.md` | Original mission briefing — kept for context. |
 
@@ -54,12 +55,15 @@ Four logical commits on top of upstream `grate-driver/xf86-video-opentegra`:
 
    Output: `src/xf86-video-opentegra/src/.libs/opentegra_drv.so`
 
-4. **Build the test client**:
+4. **Build the test clients**:
    ```sh
    docker run --rm --platform linux/arm/v7 \
-       -v "$PWD/..:/work" grate-build:armv7 \
-       bash -c 'cd /work/test && gcc -O2 -Wall -o dri3_test dri3_test.c \
-                $(pkg-config --cflags --libs xcb xcb-dri3 xcb-present xcb-sync)'
+       -v "$PWD/..:/work" grate-build:armv7 bash -c '
+       cd /work/test
+       gcc -O2 -Wall -o dri3_test dri3_test.c \
+           $(pkg-config --cflags --libs xcb xcb-dri3 xcb-present xcb-sync)
+       gcc -O2 -Wall -o flipdemo flipdemo.c \
+           $(pkg-config --cflags --libs xcb xcb-present)'
    ```
 
 5. **Build the APK** (packages the driver for a clean `apk` install):
@@ -97,8 +101,12 @@ Four logical commits on top of upstream `grate-driver/xf86-video-opentegra`:
    #   present N: mode=1 (FLIP) ...
    #   FLIP CONFIRMED: page-flip path engaged
    #   OK
-   # Run against the lightdm greeter — a running desktop compositor
-   # legitimately forces Present back to copy mode.
+
+   # flipdemo: a watchable fullscreen demo — sweeping bar, live fps
+   DISPLAY=:0 XAUTHORITY=/var/run/lightdm/root/:0 /tmp/flipdemo 15
+
+   # Run both against the lightdm greeter — a running desktop
+   # compositor legitimately forces Present back to copy mode.
    ```
 
 ## Rollback
