@@ -1,15 +1,21 @@
 /*
- * Tiny XCB DRI3 round-trip test for the opentegra DRI3 skeleton.
+ * XCB DRI3 + Present round-trip test for the opentegra driver.
  *
- *   1. Connect to X server, query DRI3 extension.
+ *   1. Connect to X server, query DRI3.
  *   2. CreatePixmap (1024x768 ARGB) — large enough to force BO not POOL.
  *   3. xcb_dri3_buffers_from_pixmap_reply  → exercises fds_from_pixmap.
- *   4. xcb_dri3_pixmap_from_buffers       → exercises pixmap_from_fds,
- *                                           using the fd from step 3.
- *   5. Free both pixmaps; close.
+ *   4. xcb_dri3_pixmap_from_buffers        → exercises pixmap_from_fds.
+ *   5. Present notify_msc on the root          → exercises queue_vblank.
+ *   6. Present a screen-sized pixmap to a fullscreen override-redirect
+ *      window and report whether the CompleteNotify came back as FLIP
+ *      or COPY → exercises check_flip / flip.
  *
- * Each protocol step prints what it did so we can correlate with the
- * "DRI3: first ..." once-only log lines in /var/log/Xorg.0.log.
+ * Each step prints what it did so it can be correlated with the
+ * once-only "DRI3: ..." / "Present: ..." lines in /var/log/Xorg.0.log.
+ *
+ * Exit status: 0 once every protocol step succeeds. Whether step 6
+ * page-flips or copies is reported but does not change the status — a
+ * running compositor or a pitch mismatch legitimately forces copy.
  */
 
 #include <stdio.h>
@@ -24,6 +30,48 @@
 
 #define W 1024
 #define H 768
+
+/* Wait for a Present CompleteNotify; returns its mode (COPY/FLIP/SKIP),
+ * or -1 on timeout. Non-matching events are drained and ignored. */
+static int
+wait_present_complete(xcb_connection_t *conn, uint32_t want_serial,
+                      uint8_t *kind_out, uint64_t *msc_out)
+{
+    for (int tries = 0; tries < 40; tries++) {
+        xcb_generic_event_t *ev = xcb_wait_for_event(conn);
+        if (!ev)
+            return -1;
+
+        int mode = -1;
+        if ((ev->response_type & 0x7f) == XCB_GE_GENERIC) {
+            xcb_ge_generic_event_t *ge = (void *)ev;
+            if (ge->event_type == XCB_PRESENT_COMPLETE_NOTIFY) {
+                xcb_present_complete_notify_event_t *pe = (void *)ev;
+                if (want_serial == 0 || pe->serial == want_serial) {
+                    if (kind_out) *kind_out = pe->kind;
+                    if (msc_out)  *msc_out  = pe->msc;
+                    mode = pe->mode;
+                }
+            }
+        }
+        free(ev);
+        if (mode >= 0)
+            return mode;
+    }
+    return -1;
+}
+
+static const char *
+present_mode_str(int mode)
+{
+    switch (mode) {
+    case XCB_PRESENT_COMPLETE_MODE_COPY:            return "COPY";
+    case XCB_PRESENT_COMPLETE_MODE_FLIP:            return "FLIP";
+    case XCB_PRESENT_COMPLETE_MODE_SKIP:            return "SKIP";
+    case XCB_PRESENT_COMPLETE_MODE_SUBOPTIMAL_COPY: return "SUBOPTIMAL_COPY";
+    default:                                        return "?";
+    }
+}
 
 int main(void)
 {
@@ -107,7 +155,7 @@ int main(void)
            pix2, gr->width, gr->height, gr->depth);
     free(gr);
 
-    /* ---- Present test: ask for a vblank notify 2 frames out. ---- */
+    /* ---- Present test: ask for a vblank notify on the root. ---- */
     xcb_query_extension_cookie_t pqc =
         xcb_query_extension(conn, 7, "Present");
     xcb_query_extension_reply_t *pqr =
@@ -120,8 +168,6 @@ int main(void)
            pqr->major_opcode, pqr->first_event, pqr->first_error);
     free(pqr);
 
-    /* Get current MSC via PresentQueryVersion + a PresentNotifyMSC. We
-     * use the root window since it always has a CRTC. */
     xcb_window_t root = screen->root;
     uint32_t serial = 0xdeadbeef;
     xcb_present_select_input(conn, xcb_generate_id(conn), root,
@@ -132,34 +178,103 @@ int main(void)
                            /* remainder  */ 0);
     xcb_flush(conn);
 
-    /* Wait for the CompleteNotify event (or any error). */
-    int got_present = 0;
-    for (int tries = 0; tries < 20 && !got_present; tries++) {
-        xcb_generic_event_t *ev = xcb_wait_for_event(conn);
-        if (!ev) break;
-        if ((ev->response_type & 0x7f) == XCB_GE_GENERIC) {
-            xcb_ge_generic_event_t *ge = (void *)ev;
-            if (ge->extension == 149 /* dri3 */) { /* ignore */ }
-            /* Present events come through GE_GENERIC with the Present
-             * extension's opcode; the inner event_type 1 is CompleteNotify. */
-            if (ge->event_type == XCB_PRESENT_COMPLETE_NOTIFY) {
-                xcb_present_complete_notify_event_t *pe = (void *)ev;
-                printf("present complete: kind=%u mode=%u serial=0x%x "
-                       "ust=%llu msc=%llu\n",
-                       pe->kind, pe->mode, pe->serial,
-                       (unsigned long long)pe->ust,
-                       (unsigned long long)pe->msc);
-                got_present = 1;
-            }
+    {
+        uint8_t kind = 0;
+        uint64_t msc = 0;
+        int mode = wait_present_complete(conn, serial, &kind, &msc);
+        if (mode < 0) {
+            fprintf(stderr, "Present notify_msc: no CompleteNotify\n");
+            return 8;
         }
-        free(ev);
-    }
-    if (!got_present) {
-        fprintf(stderr, "Present notify_msc: no CompleteNotify received\n");
-        return 8;
+        printf("present complete: kind=%u mode=%u (%s) msc=%llu\n",
+               kind, mode, present_mode_str(mode),
+               (unsigned long long)msc);
     }
 
+    /* ---- Page-flip test: present a screen-sized pixmap to a
+     * fullscreen override-redirect window. check_flip should accept it
+     * and the CompleteNotify mode should be FLIP. ---- */
+    uint16_t sw = screen->width_in_pixels;
+    uint16_t sh = screen->height_in_pixels;
+    uint8_t  sd = screen->root_depth;
+
+    xcb_window_t win = xcb_generate_id(conn);
+    uint32_t win_vals[2] = {
+        1,                              /* XCB_CW_OVERRIDE_REDIRECT */
+        XCB_EVENT_MASK_STRUCTURE_NOTIFY /* XCB_CW_EVENT_MASK */
+    };
+    xcb_create_window(conn, sd, win, screen->root,
+                      0, 0, sw, sh, 0,
+                      XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
+                      XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK, win_vals);
+    xcb_map_window(conn, win);
+    uint32_t raise = XCB_STACK_MODE_ABOVE;
+    xcb_configure_window(conn, win, XCB_CONFIG_WINDOW_STACK_MODE, &raise);
+    xcb_flush(conn);
+    printf("flip test: fullscreen override-redirect window 0x%x %ux%u depth=%u\n",
+           win, sw, sh, sd);
+
+    /* Drain events until the window is mapped (viewable) before present. */
+    for (int tries = 0; tries < 20; tries++) {
+        xcb_generic_event_t *ev = xcb_wait_for_event(conn);
+        if (!ev) break;
+        int mapped = ((ev->response_type & 0x7f) == XCB_MAP_NOTIFY);
+        free(ev);
+        if (mapped) break;
+    }
+
+    xcb_present_select_input(conn, xcb_generate_id(conn), win,
+                             XCB_PRESENT_EVENT_MASK_COMPLETE_NOTIFY);
+
+    /* Two screen-sized pixmaps, alternated so each present targets an
+     * idle buffer. Created at the root depth so check_flip accepts them. */
+    xcb_pixmap_t fpix[2];
+    for (int i = 0; i < 2; i++) {
+        fpix[i] = xcb_generate_id(conn);
+        xcb_create_pixmap(conn, sd, fpix[i], win, sw, sh);
+    }
+    xcb_flush(conn);
+
+    int got_flip = 0, got_any = 0;
+    for (int f = 0; f < 8; f++) {
+        uint32_t fserial = 0x5000 + f;
+        xcb_present_pixmap(conn, win, fpix[f & 1], fserial,
+                           XCB_NONE,  /* valid region   */
+                           XCB_NONE,  /* update region  */
+                           0, 0,      /* x_off, y_off    */
+                           XCB_NONE,  /* target_crtc     */
+                           XCB_NONE,  /* wait_fence      */
+                           XCB_NONE,  /* idle_fence      */
+                           0,         /* options         */
+                           0,         /* target_msc=next */
+                           0, 0,      /* divisor, remainder */
+                           0, NULL);  /* notifies        */
+        xcb_flush(conn);
+
+        uint8_t kind = 0;
+        uint64_t msc = 0;
+        int mode = wait_present_complete(conn, fserial, &kind, &msc);
+        if (mode < 0) {
+            fprintf(stderr, "flip test: no CompleteNotify for present %d\n", f);
+            return 9;
+        }
+        got_any = 1;
+        printf("  present %d: mode=%u (%s) msc=%llu\n",
+               f, mode, present_mode_str(mode), (unsigned long long)msc);
+        if (mode == XCB_PRESENT_COMPLETE_MODE_FLIP)
+            got_flip = 1;
+    }
+
+    if (got_flip)
+        printf("FLIP CONFIRMED: page-flip path engaged\n");
+    else if (got_any)
+        printf("flip not engaged (copy mode) — check for a running "
+               "compositor or a pixmap/front-BO pitch mismatch\n");
+
     /* Cleanup. */
+    xcb_free_pixmap(conn, fpix[0]);
+    xcb_free_pixmap(conn, fpix[1]);
+    xcb_destroy_window(conn, win);
     xcb_free_pixmap(conn, pix2);
     xcb_free_pixmap(conn, pix);
     free(br);

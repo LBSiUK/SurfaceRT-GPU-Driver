@@ -7,6 +7,10 @@ src/
 # ccache for the cross-build container
 .ccache/
 
+# APK build outputs from abuild (rebuild on demand)
+packaging/apk-out/
+packaging/.distfiles/
+
 # Built test binaries (architecture-specific; rebuild on demand)
 test/dri3_test
 
