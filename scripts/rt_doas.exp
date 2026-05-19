@@ -1,0 +1,20 @@
+#!/usr/bin/env expect -f
+# Usage: rt_doas.exp <remote_command>
+# Runs a command via doas on the Surface RT, feeding both ssh and doas passwords.
+set timeout 60
+set pw "choccydog"
+set cmd [lindex $argv 0]
+spawn ssh -tt -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 leonb@10.101.32.179 "doas sh -c '$cmd'"
+expect {
+    -re "password:" {
+        send "$pw\r"
+        exp_continue
+    }
+    -re "Password:" {
+        send "$pw\r"
+        exp_continue
+    }
+    eof
+}
+catch wait result
+exit [lindex $result 3]

@@ -1,0 +1,16 @@
+# Upstream clones used as build inputs / references. The opentegra
+# work lives in its own fork: github.com/LBSiUK/xf86-video-opentegra
+# (branch: dri3-present). Other entries here are unmodified upstreams
+# pulled fresh by anyone wanting to reproduce the build.
+src/
+
+# ccache for the cross-build container
+.ccache/
+
+# Built test binaries (architecture-specific; rebuild on demand)
+test/dri3_test
+
+# Editor / OS junk
+.DS_Store
+*.swp
+*~

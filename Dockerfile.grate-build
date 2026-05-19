@@ -1,0 +1,68 @@
+FROM alpine:3.23
+
+RUN apk add --no-cache \
+        alpine-sdk \
+        sudo \
+        abuild \
+        build-base \
+        bsd-compat-headers \
+        meson \
+        ninja \
+        pkgconf \
+        bison \
+        flex \
+        m4 \
+        python3 \
+        py3-mako \
+        py3-yaml \
+        py3-packaging \
+        libdrm-dev \
+        wayland-dev \
+        wayland-protocols \
+        libxcb-dev \
+        xcb-util-keysyms-dev \
+        xcb-util-renderutil-dev \
+        xcb-util-wm-dev \
+        libxrandr-dev \
+        libxshmfence-dev \
+        libxv-dev \
+        libxext-dev \
+        libxfixes-dev \
+        libxcvt-dev \
+        xorg-server-dev \
+        xorgproto \
+        fontsproto \
+        xproto \
+        util-macros \
+        expat-dev \
+        zlib-dev \
+        llvm-dev \
+        llvm-static \
+        zstd-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        lz4-dev \
+        eudev-dev \
+        elfutils-dev \
+        libxml2-dev \
+        glslang-dev \
+        spirv-tools-dev \
+        autoconf \
+        automake \
+        libtool \
+        git \
+        bash \
+        ccache
+
+RUN adduser -D -G abuild builder && \
+    echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && \
+    mkdir -p /var/cache/distfiles && \
+    chgrp abuild /var/cache/distfiles && \
+    chmod g+w /var/cache/distfiles
+
+USER builder
+WORKDIR /work
+ENV PATH=/usr/lib/ccache/bin:$PATH \
+    CCACHE_DIR=/work/.ccache
+
+CMD ["/bin/bash"]
