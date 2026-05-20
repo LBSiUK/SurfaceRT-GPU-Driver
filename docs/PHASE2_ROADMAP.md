@@ -18,8 +18,10 @@ and `joyful-bubbling-moonbeam.md` (the original exploration notes).
 ## Strategic framing — two paths to hardware 3D
 
 The grate Gallium driver lives in the `grate-driver/mesa` fork. Its newest
-maintained branch is **`22.0.1`** (Mesa 22.0.1, May 2022). The device runs
-stock **Mesa 25.2.7**. There are two ways to bridge that gap:
+maintained branch is **`22.2.4`** (Mesa 22.2, Dec 2022 — discovered after
+this doc was first written; supersedes the earlier `22.0.1` choice, adds
+a Mesa 22.2 rebase + 7 extra grate commits). The device runs stock
+**Mesa 25.2.7**. There are two ways to bridge that gap:
 
 - **Path A — ship grate-mesa 22 wholesale.** Build *all* of grate-mesa
   22.0.1 (`libGL`/`libEGL`/`libgbm`/`grate_dri.so`/`swrast`) and install
@@ -62,14 +64,14 @@ breakage). Do NOT reuse `grate-build:armv7` (Alpine 3.23).
 
 ---
 
-## Session 1 — Build grate-mesa 22.0.1
+## Session 1 — Build grate-mesa 22.2.4
 
 **Goal:** a clean `grate_dri.so` + `libGL`/`libEGL`/`libgbm` from the
-`22.0.1` branch. Prove the toolchain; do not touch the device yet.
+`22.2.4` branch. Prove the toolchain; do not touch the device yet.
 
 **Steps**
-1. Repoint the worktree: `git -C src/grate-mesa fetch origin`, then in
-   `src/grate-mesa-grate/`: `git checkout -B grate-22.0.1 origin/22.0.1`.
+1. ✅ Repoint the worktree (done 2026-05-20):
+   `src/grate-mesa-grate/` is on `grate-22.2.4` (tip `4621b88ee2e`).
 2. Write `Dockerfile.grate-mesa-build` (Alpine 3.17) + a meson cross file
    for armv7. Tag the image `grate-mesa-build`.
 3. `meson setup build -Dgallium-drivers=grate,swrast -Dvulkan-drivers=
@@ -102,7 +104,10 @@ GR3D and capture what happens.
 2. Run `es2gears` (or a hand-written one-triangle GLES2 program) with
    `LD_LIBRARY_PATH=/opt/grate-mesa/lib
    LIBGL_DRIVERS_PATH=/opt/grate-mesa/lib/dri
-   MESA_LOADER_DRIVER_OVERRIDE=grate LIBGL_DEBUG=verbose`.
+   MESA_LOADER_DRIVER_OVERRIDE=tegra LIBGL_DEBUG=verbose`. (The grate
+   driver registers under the filename `tegra_dri.so`, not
+   `grate_dri.so` — `src/gallium/targets/dri/meson.build` maps both
+   `with_gallium_tegra` and `with_gallium_grate` to `tegra_dri.so`.)
 3. This is the first time Phase 1's DRI3/Present plumbing carries buffers
    from a *real GPU driver*. Watch `dmesg` for Tegra30 `host1x` job
    ioctls — even a crash that reaches real ioctls is progress.

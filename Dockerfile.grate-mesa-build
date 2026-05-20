@@ -1,0 +1,72 @@
+## grate-mesa cross-build container
+##
+## Builds grate-mesa 22.2.4 (grate-driver/mesa, branch 22.2.4) for the
+## Surface RT (armv7 musl, Alpine 3.23 on the device).
+##
+## Base: alpine:3.17 armv7. Python 3.10 / meson 0.63 / mako 1.2 here
+## are contemporaneous with Mesa 22.2 (Dec 2022); newer Alpine's
+## meson 1.x trips deprecation warnings in Mesa 22.
+##
+## Apple Silicon dropped native AArch32, so this image runs under
+## qemu binfmt emulation. Slower than a real aarch64->armv7 cross
+## toolchain, but correct and reproducible; switch to cross when
+## iteration cost becomes painful (PHASE2_ROADMAP "Build infrastructure"
+## section). Re-run `docker run --privileged --rm tonistiigi/binfmt
+## --install arm` if you see "exec format error" pulling this image.
+##
+## DO NOT reuse grate-build:armv7 (Alpine 3.23) — meson 1.x and the
+## newer Python break Mesa 22's build scripts.
+
+FROM --platform=linux/arm/v7 alpine:3.17
+
+RUN apk add --no-cache \
+        build-base \
+        bsd-compat-headers \
+        meson \
+        ninja \
+        pkgconf \
+        bison \
+        flex \
+        m4 \
+        python3 \
+        py3-mako \
+        py3-yaml \
+        py3-packaging \
+        py3-pip \
+        libdrm-dev \
+        libxcb-dev \
+        libxrandr-dev \
+        libxshmfence-dev \
+        libxext-dev \
+        libxfixes-dev \
+        libxdamage-dev \
+        libxxf86vm-dev \
+        libx11-dev \
+        libxv-dev \
+        xtrans \
+        xorgproto \
+        util-macros \
+        expat-dev \
+        zlib-dev \
+        zstd-dev \
+        lz4-dev \
+        libpng-dev \
+        eudev-dev \
+        elfutils-dev \
+        libxml2-dev \
+        autoconf \
+        automake \
+        libtool \
+        git \
+        bash \
+        ccache
+
+RUN adduser -D builder && \
+    echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+USER builder
+WORKDIR /work
+ENV PATH=/usr/lib/ccache/bin:$PATH \
+    CCACHE_DIR=/work/.ccache
+
+CMD ["/bin/bash"]
