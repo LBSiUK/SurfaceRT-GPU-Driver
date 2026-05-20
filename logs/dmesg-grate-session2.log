@@ -1,0 +1,1 @@
+[ 4709.702754] [drm:tegra_drm_copy_and_patch_cmdstream] *ERROR* invalid class id 0x0 (process:es2tri pid:26280)

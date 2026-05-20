@@ -1,0 +1,22 @@
+#!/usr/bin/env expect -f
+# Usage: rt_ssh.exp <remote_command>
+# Runs a command via ssh as leonb on the Surface RT (no doas wrap).
+# Useful for X clients that need to talk to leonb's X session, or any
+# non-privileged command. Same password as rt_doas.exp.
+set timeout 120
+set pw "choccydog"
+set cmd [lindex $argv 0]
+spawn ssh -tt -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 leonb@10.101.32.179 "sh -c '$cmd'"
+expect {
+    -re "password:" {
+        send "$pw\r"
+        exp_continue
+    }
+    -re "Password:" {
+        send "$pw\r"
+        exp_continue
+    }
+    eof
+}
+catch wait result
+exit [lindex $result 3]

@@ -1,0 +1,23 @@
+#!/usr/bin/env expect -f
+# Usage: rt_scp.exp <local_path> <remote_path>
+# Copies a local file to the Surface RT over scp, feeding the
+# leonb@10.101.32.179 password automatically. Password matches
+# rt_doas.exp.
+set timeout 120
+set pw "choccydog"
+set src [lindex $argv 0]
+set dst [lindex $argv 1]
+spawn scp -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 $src leonb@10.101.32.179:$dst
+expect {
+    -re "password:" {
+        send "$pw\r"
+        exp_continue
+    }
+    -re "Password:" {
+        send "$pw\r"
+        exp_continue
+    }
+    eof
+}
+catch wait result
+exit [lindex $result 3]
