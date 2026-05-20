@@ -1,0 +1,9 @@
+libGL: Can't open configuration file /usr/local/etc/drirc: No such file or directory.
+libGL: Can't open configuration file /home/leonb/.drirc: No such file or directory.
+libGL: Can't open configuration file /usr/local/etc/drirc: No such file or directory.
+libGL: Can't open configuration file /home/leonb/.drirc: No such file or directory.
+libGL: Can't open configuration file /usr/local/etc/drirc: No such file or directory.
+libGL: Can't open configuration file /home/leonb/.drirc: No such file or directory.
+EGL_VERSION = 1.4
+../src/gallium/drivers/grate/grate_stream.c:117/grate_stream_flush(): drm_tegra_job_submit() failed -22
+Connection to 10.101.32.179 closed.

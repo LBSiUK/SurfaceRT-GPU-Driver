@@ -11,6 +11,10 @@ src/
 packaging/apk-out/
 packaging/.distfiles/
 
+# Staged install tarballs for device deploy (rebuild on demand from
+# Dockerfile.grate-mesa-build + src/grate-mesa-grate branch).
+artifacts/
+
 # Built test binaries (architecture-specific; rebuild on demand)
 test/dri3_test
 test/flipdemo

@@ -92,10 +92,20 @@ kernel UAPI; that surfaces here or in Session 2.
 
 ---
 
-## Session 2 — First GL app against grate
+## Session 2 — First GL app against grate ✅ done (2026-05-20)
 
 **Goal:** run a minimal GLES2 app through the grate driver on the actual
 GR3D and capture what happens.
+
+**Result:** "off llvmpipe" milestone reached. `glxinfo` and `es2_info`
+both report `Vendor: Grate / Renderer: Tegra / OpenGL ES 2.0 Mesa
+22.2.4` via `tegra_dri.so` (no llvmpipe). `es2tri` built a real GR3D
+cmdstream and submitted it via `DRM_TEGRA_SUBMIT`; kernel logged
+`tegra_drm_copy_and_patch_cmdstream: invalid class id 0x0`. Three
+diagnoses captured for Session 3 (see HANDOFF "Session 2"):
+(1) cmdstream UAPI mismatch — the blocker;
+(2) 11-bit INDEX_COUNT assertion blocking large draws;
+(3) cap-reporting bug crashing on context teardown.
 
 **Steps**
 1. Install the Session 1 build into a prefix on the device, e.g.
