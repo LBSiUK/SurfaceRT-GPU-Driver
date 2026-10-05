@@ -1,0 +1,8 @@
+# Neither Dockerfile copies anything from the build context, so keep the
+# large local trees (upstream clones, ccache, build output) out of it.
+src/
+.ccache/
+artifacts/
+packaging/apk-out/
+packaging/.distfiles/
+logs/
