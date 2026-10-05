@@ -1,5 +1,14 @@
 # Phase 2 Roadmap — Hardware 3D on the Tegra 3
 
+> **Historical document.** This plan was written on 2026-05-20, before
+> the change of direction described under "Where this is heading" in the
+> [README](../README.md). Sessions 1 to 3 were carried out (grate-mesa
+> 22.2.4 built, the driver ran on hardware, and es2tri / es2gears
+> rendered on the GR3D). The later sessions, the Path B rebase and the
+> plan to build on `grate-driver/mesa` are superseded by the libre-tegra
+> `grate-wip` work. `HANDOFF.md` and the other session notes mentioned
+> below are local files that are not part of this repository.
+
 **Goal:** get the Tegra 3 (T30) GR3D engine actually executing OpenGL ES,
 so `glxinfo`/`es2_info` report a hardware renderer instead of `llvmpipe`,
 and a Wayland compositor (Phosh/`phoc`) can run GLES2-accelerated.
