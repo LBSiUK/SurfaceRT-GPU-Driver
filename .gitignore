@@ -18,6 +18,7 @@ artifacts/
 # Built test binaries (architecture-specific; rebuild on demand)
 test/dri3_test
 test/flipdemo
+test/gltri_bench
 
 # Editor / OS junk
 .DS_Store

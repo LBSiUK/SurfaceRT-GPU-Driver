@@ -20,6 +20,8 @@ RUN apk add --no-cache \
         wayland-dev \
         wayland-protocols \
         libxcb-dev \
+        libx11-dev \
+        mesa-dev \
         xcb-util-keysyms-dev \
         xcb-util-renderutil-dev \
         xcb-util-wm-dev \
