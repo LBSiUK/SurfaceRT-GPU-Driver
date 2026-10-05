@@ -1,22 +1,18 @@
-#!/usr/bin/env expect -f
+#!/usr/bin/env expect
 # Usage: rt_ssh.exp <remote_command>
-# Runs a command via ssh as leonb on the Surface RT (no doas wrap).
-# Useful for X clients that need to talk to leonb's X session, or any
-# non-privileged command. Same password as rt_doas.exp.
-set timeout 120
-set pw "REMOVED"
-set cmd [lindex $argv 0]
-spawn ssh -tt -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 leonb@10.101.32.179 "sh -c '$cmd'"
-expect {
-    -re "password:" {
-        send "$pw\r"
-        exp_continue
-    }
-    -re "Password:" {
-        send "$pw\r"
-        exp_continue
-    }
-    eof
+#
+# Runs a command over ssh as RT_USER on the Surface RT (no doas). Useful
+# for X clients that talk to that user's X session, or any unprivileged
+# command. Connection settings come from RT_HOST, RT_USER, RT_PORT,
+# RT_PASS and RT_SSH_OPTS; see rt_common.tcl for defaults.
+
+source [file join [file dirname [info script]] rt_common.tcl]
+
+if {[llength $argv] != 1} {
+    send_user "usage: [file tail $argv0] <remote_command>\n"
+    exit 2
 }
-catch wait result
-exit [lindex $result 3]
+set cmd [lindex $argv 0]
+
+spawn ssh -tt {*}$rt_ssh_opts -p $rt_port $rt_user@$rt_host "sh -c [rt_shquote $cmd]"
+rt_finish
