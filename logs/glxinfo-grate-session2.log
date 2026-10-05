@@ -1,13 +1,13 @@
-spawn ssh -tt -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 leonb@10.101.32.179 sh -c 'DISPLAY=:0 XAUTHORITY=/home/leonb/.Xauthority LD_LIBRARY_PATH=/opt/grate-mesa/lib LIBGL_DRIVERS_PATH=/opt/grate-mesa/lib/dri MESA_LOADER_DRIVER_OVERRIDE=tegra LIBGL_DEBUG=verbose glxinfo -B 2>&1'
-leonb@10.101.32.179's password: 
+spawn ssh -tt -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 user@surface-rt sh -c 'DISPLAY=:0 XAUTHORITY=/home/user/.Xauthority LD_LIBRARY_PATH=/opt/grate-mesa/lib LIBGL_DRIVERS_PATH=/opt/grate-mesa/lib/dri MESA_LOADER_DRIVER_OVERRIDE=tegra LIBGL_DEBUG=verbose glxinfo -B 2>&1'
+user@surface-rt's password: 
 name of display: :0
 libGL: Can't open configuration file /usr/local/etc/drirc: No such file or directory.
-libGL: Can't open configuration file /home/leonb/.drirc: No such file or directory.
+libGL: Can't open configuration file /home/user/.drirc: No such file or directory.
 libGL: MESA-LOADER: dlopen(/opt/grate-mesa/lib/dri/tegra_dri.so)
 libGL: Can't open configuration file /usr/local/etc/drirc: No such file or directory.
-libGL: Can't open configuration file /home/leonb/.drirc: No such file or directory.
+libGL: Can't open configuration file /home/user/.drirc: No such file or directory.
 libGL: Can't open configuration file /usr/local/etc/drirc: No such file or directory.
-libGL: Can't open configuration file /home/leonb/.drirc: No such file or directory.
+libGL: Can't open configuration file /home/user/.drirc: No such file or directory.
 libGL: Using DRI3 for screen 0
 unsupported handle type: 2
 display: :0  screen: 0
@@ -30,4 +30,4 @@ OpenGL version string: 2.1 Mesa 22.2.4
 OpenGL shading language version string: 1.20
 unsupported handle type: 2
 Assertion failed: maxcb <= PIPE_MAX_CONSTANT_BUFFERS (../src/gallium/auxiliary/cso_cache/cso_context.c: cso_unbind_context: 349)
-Connection to 10.101.32.179 closed.
+Connection to surface-rt closed.
