@@ -1,20 +1,18 @@
-#!/usr/bin/env expect -f
+#!/usr/bin/env expect
 # Usage: rt_doas.exp <remote_command>
-# Runs a command via doas on the Surface RT, feeding both ssh and doas passwords.
-set timeout 60
-set pw "REMOVED"
-set cmd [lindex $argv 0]
-spawn ssh -tt -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 leonb@10.101.32.179 "doas sh -c '$cmd'"
-expect {
-    -re "password:" {
-        send "$pw\r"
-        exp_continue
-    }
-    -re "Password:" {
-        send "$pw\r"
-        exp_continue
-    }
-    eof
+#
+# Runs a command as root (via doas) on the Surface RT, answering both the
+# ssh and the doas password prompts, for headless deploys. Connection
+# settings come from RT_HOST, RT_USER, RT_PORT, RT_PASS and RT_SSH_OPTS;
+# see rt_common.tcl for defaults.
+
+source [file join [file dirname [info script]] rt_common.tcl]
+
+if {[llength $argv] != 1} {
+    send_user "usage: [file tail $argv0] <remote_command>\n"
+    exit 2
 }
-catch wait result
-exit [lindex $result 3]
+set cmd [lindex $argv 0]
+
+spawn ssh -tt {*}$rt_ssh_opts -p $rt_port $rt_user@$rt_host "doas sh -c [rt_shquote $cmd]"
+rt_finish

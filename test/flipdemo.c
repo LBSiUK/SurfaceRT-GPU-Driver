@@ -215,8 +215,9 @@ int main(int argc, char **argv)
     else if (flips)
         printf("PAGE-FLIP: partial — %ld/%ld frames flipped.\n", flips, frame);
     else
-        printf("PAGE-FLIP: not engaged (copy mode) — a desktop compositor "
-               "is likely redirecting the window.\n");
+        printf("PAGE-FLIP: not engaged (copy mode) — either the X driver "
+               "cannot flip, or a desktop compositor is redirecting the "
+               "window.\n");
 
     /* Cleanup — destroying the window makes Present unflip. */
     xcb_free_gc(conn, gc);

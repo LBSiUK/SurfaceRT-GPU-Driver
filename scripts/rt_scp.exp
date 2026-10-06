@@ -1,23 +1,18 @@
-#!/usr/bin/env expect -f
+#!/usr/bin/env expect
 # Usage: rt_scp.exp <local_path> <remote_path>
-# Copies a local file to the Surface RT over scp, feeding the
-# leonb@10.101.32.179 password automatically. Password matches
-# rt_doas.exp.
-set timeout 120
-set pw "REMOVED"
+#
+# Copies a local file to the Surface RT over scp, answering the password
+# prompt. Connection settings come from RT_HOST, RT_USER, RT_PORT,
+# RT_PASS and RT_SSH_OPTS; see rt_common.tcl for defaults.
+
+source [file join [file dirname [info script]] rt_common.tcl]
+
+if {[llength $argv] != 2} {
+    send_user "usage: [file tail $argv0] <local_path> <remote_path>\n"
+    exit 2
+}
 set src [lindex $argv 0]
 set dst [lindex $argv 1]
-spawn scp -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 $src leonb@10.101.32.179:$dst
-expect {
-    -re "password:" {
-        send "$pw\r"
-        exp_continue
-    }
-    -re "Password:" {
-        send "$pw\r"
-        exp_continue
-    }
-    eof
-}
-catch wait result
-exit [lindex $result 3]
+
+spawn scp {*}$rt_ssh_opts -P $rt_port $src $rt_user@$rt_host:$dst
+rt_finish

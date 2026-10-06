@@ -93,7 +93,8 @@ int main(void)
     xcb_query_extension_reply_t *qer =
         xcb_query_extension_reply(conn, qec, NULL);
     if (!qer || !qer->present) {
-        fprintf(stderr, "DRI3 extension not present\n");
+        fprintf(stderr, "DRI3 extension not present (needs the "
+                "dri3-present opentegra driver, or another DRI3 X driver)\n");
         return 2;
     }
     printf("DRI3 extension: opcode=%u event=%u error=%u\n",
@@ -118,6 +119,10 @@ int main(void)
         return 3;
     }
     int nfds = br->nfd;
+    if (nfds < 1 || nfds > 4) {
+        fprintf(stderr, "buffers_from_pixmap returned %d planes\n", nfds);
+        return 4;
+    }
     int *fds = xcb_dri3_buffers_from_pixmap_reply_fds(conn, br);
     uint32_t *strides = xcb_dri3_buffers_from_pixmap_strides(br);
     uint32_t *offsets = xcb_dri3_buffers_from_pixmap_offsets(br);
@@ -126,20 +131,28 @@ int main(void)
            nfds, strides[0], offsets[0],
            (unsigned long long)br->modifier,
            br->depth, br->bpp, br->width, br->height);
-    if (nfds < 1) return 4;
+
+    /* The reply only carries nfds strides/offsets; pad to the four
+     * planes PixmapFromBuffers takes rather than reading past them. */
+    uint32_t st[4] = { 0 }, of[4] = { 0 };
+    int dup_fds[4];
+    for (int i = 0; i < nfds; i++) {
+        st[i] = strides[i];
+        of[i] = offsets[i];
+        dup_fds[i] = dup(fds[i]);   /* xcb consumes the fds; keep ours */
+        if (dup_fds[i] < 0) { perror("dup"); return 5; }
+    }
 
     /* Import the dma-buf back as a new pixmap -> exercises pixmap_from_fds. */
     xcb_pixmap_t pix2 = xcb_generate_id(conn);
-    int dup_fd = dup(fds[0]);   /* xcb consumes the fd; dup so we keep one */
-    if (dup_fd < 0) { perror("dup"); return 5; }
     xcb_dri3_pixmap_from_buffers(conn, pix2, screen->root,
                                  nfds, br->width, br->height,
-                                 strides[0], offsets[0],
-                                 strides[1], offsets[1],
-                                 strides[2], offsets[2],
-                                 strides[3], offsets[3],
+                                 st[0], of[0],
+                                 st[1], of[1],
+                                 st[2], of[2],
+                                 st[3], of[3],
                                  br->depth, br->bpp, br->modifier,
-                                 &dup_fd);
+                                 dup_fds);
     /* xcb_dri3_pixmap_from_buffers is a void request; round-trip via
      * GetGeometry on the new pixmap to flush and detect a server-side
      * protocol error. */
